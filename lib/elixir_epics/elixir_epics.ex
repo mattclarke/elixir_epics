@@ -77,7 +77,7 @@ defmodule ElixirEpics.Monitor do
   end
 
   defp generate_flatbuffer_for_double(pv, data) do
-    %{"secondsPastEpoch" => seconds, "nanoseconds" => nanoseconds} = data["timeStamp"]
+    %{"timeStamp" => %{"secondsPastEpoch" => seconds, "nanoseconds" => nanoseconds}} = data
     timestamp = seconds * 1_000_000_000 + nanoseconds
     buffer = FlatBuffers.convert_flatbuffer_double(pv, timestamp, data["value"])
     Logger.info("FlatBuffer: #{inspect(buffer)}")
