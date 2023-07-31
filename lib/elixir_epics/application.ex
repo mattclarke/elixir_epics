@@ -1,5 +1,6 @@
 defmodule ElixirEpics.Application do
   @moduledoc false
+  require Logger
 
   use Application
 

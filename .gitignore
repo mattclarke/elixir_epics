@@ -24,3 +24,6 @@ elixir_epics-*.tar
 
 # Temporary files, for example, from tests.
 /tmp/
+
+# LSP files
+.elixir_ls

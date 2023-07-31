@@ -25,8 +25,8 @@ defmodule ElixirEpics.Monitor do
     {:ok, %{port: port, connected: False, latest_data: %{}, exit_status: nil}}
   end
 
-  def terminate(reason, %{port: port} = state) do
-    Logger.warn("Terminated: #{reason}")
+  def terminate(reason, %{port: _port} = _state) do
+    Logger.warning("Terminated: #{reason}")
     :normal
   end
 
@@ -34,6 +34,8 @@ defmodule ElixirEpics.Monitor do
   def handle_info({port, {:data, text_line}}, %{port: port} = state) do
     [pv, payload] = String.split(text_line, " ", parts: 2)
     {status, data} = Jason.decode(payload)
+
+    Logger.info("#{pv}")
 
     case status do
       :ok ->
@@ -64,7 +66,7 @@ defmodule ElixirEpics.Monitor do
 
   # Triggered when the process is asked to exit
   def handle_info({:EXIT, _port, :normal}, state) do
-    Logger.warn("handle_info: EXIT")
+    Logger.warning("handle_info: EXIT")
     {:noreply, state}
   end
 
