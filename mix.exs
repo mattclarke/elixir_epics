@@ -21,6 +21,7 @@ defmodule ElixirEpics.MixProject do
   defp deps do
     [
       {:jason, "~> 1.4"},
+      {:rustler, "~> 0.29.1"},
     ]
   end
 end

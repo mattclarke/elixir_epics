@@ -41,6 +41,7 @@ defmodule ElixirEpics.Monitor do
       :ok ->
         updated = Map.merge(state.latest_data, data)
         Logger.info("Data: #{inspect(updated)}")
+        generate_flatbuffer_for_double(pv, updated)
         {:noreply, %{state | latest_data: updated, connected: true}}
 
       :error ->
@@ -73,5 +74,12 @@ defmodule ElixirEpics.Monitor do
   def handle_info(msg, state) do
     Logger.info("Unhandled message: #{inspect(msg)}")
     {:noreply, state}
+  end
+
+  defp generate_flatbuffer_for_double(pv, data) do
+    %{"secondsPastEpoch" => seconds, "nanoseconds" => nanoseconds} = data["timeStamp"]
+    timestamp = seconds * 1_000_000_000 + nanoseconds
+    buffer = FlatBuffers.convert_flatbuffer_double(pv, timestamp, data["value"])
+    Logger.info("FlatBuffer: #{inspect(buffer)}")
   end
 end

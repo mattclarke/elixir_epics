@@ -1,0 +1,14 @@
+[package]
+name = "flatbuffers"
+version = "0.1.0"
+authors = []
+edition = "2021"
+
+[lib]
+name = "flatbuffers"
+path = "src/lib.rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+flatbuffers = "23.5.26"
+rustler = "0.29.1"
