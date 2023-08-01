@@ -22,6 +22,7 @@ defmodule ElixirEpics.MixProject do
     [
       {:jason, "~> 1.4"},
       {:rustler, "~> 0.29.1"},
+      {:brod, "~> 3.10.0"},
     ]
   end
 end

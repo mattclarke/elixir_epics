@@ -81,5 +81,6 @@ defmodule ElixirEpics.Monitor do
     timestamp = seconds * 1_000_000_000 + nanoseconds
     buffer = FlatBuffers.convert_flatbuffer_double(pv, timestamp, data["value"])
     Logger.info("FlatBuffer: #{inspect(buffer)}")
+    :brod.produce_sync(:kafka_client, "test_topic", :hash, "key", buffer)
   end
 end
