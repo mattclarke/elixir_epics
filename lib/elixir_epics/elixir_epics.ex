@@ -41,7 +41,7 @@ defmodule ElixirEpics.Monitor do
       :ok ->
         updated = Map.merge(state.latest_data, data)
         Logger.info("Data: #{inspect(updated)}")
-        generate_flatbuffer_for_double(pv, updated)
+        generate_flatbuffer_for_double(pv, updated) |> send_to_kafka("test_topic")
         {:noreply, %{state | latest_data: updated, connected: true}}
 
       :error ->
@@ -78,9 +78,13 @@ defmodule ElixirEpics.Monitor do
 
   defp generate_flatbuffer_for_double(pv, data) do
     %{"timeStamp" => %{"secondsPastEpoch" => seconds, "nanoseconds" => nanoseconds}} = data
-    timestamp = seconds * 1_000_000_000 + nanoseconds
-    buffer = FlatBuffers.convert_flatbuffer_double(pv, timestamp, data["value"])
-    Logger.info("FlatBuffer: #{inspect(buffer)}")
-    :brod.produce_sync(:kafka_client, "test_topic", :hash, "key", buffer)
+    timestamp_ns = seconds * 1_000_000_000 + nanoseconds
+    buffer = FlatBuffers.convert_flatbuffer_double(pv, timestamp_ns, data["value"])
+    timestamp_ms = trunc(timestamp_ns / 1_000)
+    {timestamp_ms, buffer}
+  end
+
+  defp send_to_kafka({timestamp_ms, buffer}, topic) do
+    :brod.produce_sync(:kafka_client, topic, :hash, <<>>, {timestamp_ms, buffer})
   end
 end
