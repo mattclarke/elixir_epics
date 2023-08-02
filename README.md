@@ -13,6 +13,12 @@ Running:
 > iex -S mix
 ```
 
+### Adding monitors by hand
+From within iex:
+```
+> ElixirEpics.MonitorSupervisor.start_child(123)
+```
+
 ## How it works
 - The program creates a GenServer that uses the [Port module](https://hexdocs.pm/elixir/Port.html) to create a pvmonitor process to monitor a port.
 - The call is via the `run_wrapper` script as that makes sure that the pvmonitor process is cleaned up if the GenServer is stopped. See [zombie operating system processes](https://hexdocs.pm/elixir/Port.html#module-zombie-operating-system-processes) for more information.

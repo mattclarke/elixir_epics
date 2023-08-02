@@ -9,7 +9,7 @@ defmodule ElixirEpics.Application do
     :observer.start()
 
     children = [
-      {ElixirEpics.Monitor, []}
+      {ElixirEpics.MonitorSupervisor, []}
     ]
 
     opts = [strategy: :one_for_one, name: ElixirEpics.Supervisor]
