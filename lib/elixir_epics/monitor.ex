@@ -9,13 +9,13 @@ defmodule ElixirEpics.Monitor do
     GenServer.start_link(__MODULE__, args, opts)
   end
 
-  def init(_args) do
+  def init(pvname) do
     Process.flag(:trap_exit, true)
 
     port =
       Port.open({:spawn_executable, @wrapper}, [
         :binary,
-        args: [@command, "-M", "json", "SIMPLE:VALUE2"]
+        args: [@command, "-M", "json", pvname]
       ])
 
     Port.monitor(port)

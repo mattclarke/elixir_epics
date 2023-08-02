@@ -16,7 +16,7 @@ Running:
 ### Adding monitors by hand
 From within iex:
 ```
-> ElixirEpics.MonitorSupervisor.start_child(123)
+> ElixirEpics.MonitorSupervisor.start_child("SIMPLE:VALUE2")
 ```
 
 ## How it works
