@@ -9,7 +9,7 @@ defmodule ElixirEpics.Monitor do
     GenServer.start_link(__MODULE__, args, opts)
   end
 
-  def init(pvname) do
+  def init({pvname, topic, _schema}) do
     Process.flag(:trap_exit, true)
 
     port =
@@ -29,7 +29,9 @@ defmodule ElixirEpics.Monitor do
        latest_data: %{},
        exit_status: nil,
        has_connected: false,
-       pvname: pvname
+       pvname: pvname,
+       topic: topic,
+       cached_value: nil
      }}
   end
 
@@ -40,8 +42,9 @@ defmodule ElixirEpics.Monitor do
 
   # Triggered by a timer
   def handle_info(:update, state) do
-    generate_flatbuffer_for_double(state[:pvname], state[:latest_data])
-    |> send_to_kafka("test_topic")
+    if state.connected do
+      send_to_kafka(state.cached_value, "test_topic")
+    end
 
     schedule_update()
     {:noreply, state}
@@ -52,19 +55,15 @@ defmodule ElixirEpics.Monitor do
     [pv, payload] = String.split(text_line, " ", parts: 2)
     {status, data} = Jason.decode(payload)
 
-    Logger.info("#{pv}")
+    Logger.info("Updated for #{pv}")
 
     case status do
       :ok ->
-        updated = Map.merge(state.latest_data, data)
-        Logger.info("Data: #{inspect(updated)}")
-        generate_flatbuffer_for_double(state[:pvname], updated) |> send_to_kafka("test_topic")
-        state = on_first_connection(state)
-        {:noreply, %{state | latest_data: updated, connected: true}}
+        {:noreply, handle_value_update(state, data)}
 
       :error ->
         Logger.info("Payload: #{inspect(payload)}")
-        {:noreply, %{state | latest_data: %{}, connected: false}}
+        {:noreply, %{state | latest_data: %{}, connected: false, cached_value: nil}}
     end
   end
 
@@ -104,6 +103,15 @@ defmodule ElixirEpics.Monitor do
 
   defp send_to_kafka({timestamp_ms, buffer}, topic) do
     :brod.produce_sync(:kafka_client, topic, :hash, <<>>, {timestamp_ms, buffer})
+  end
+
+  defp handle_value_update(state, data) do
+    updated = Map.merge(state.latest_data, data)
+    Logger.info("Data: #{inspect(updated)}")
+    result = generate_flatbuffer_for_double(state[:pvname], updated)
+    send_to_kafka(result, state.topic)
+    state = on_first_connection(state)
+    %{state | latest_data: updated, connected: true, cached_value: result}
   end
 
   defp on_first_connection(state) do
