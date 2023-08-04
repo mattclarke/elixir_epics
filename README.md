@@ -40,6 +40,7 @@ From within iex:
 
 ## Possible improvements
 - Alarms and connections.
+- How to delete monitors.
+- Use `raw` until the `json` bug is fixed
 - The schema is hard-coded.
 - Use ETS just for experience of using it.
-- Could the need for the `run_wrapper` be removed by registering the pid of the port and killing it in the supervisor when required. I guess it would be orphaned if BEAM crashed though, so perhaps not a great idea...
