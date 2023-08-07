@@ -62,7 +62,7 @@ defmodule ElixirEpics.Monitor do
         {:noreply, handle_value_update(state, data)}
 
       :error ->
-        Logger.info("Payload: #{inspect(payload)}")
+        Logger.info("Couldn't convert to json: #{inspect(payload)}")
         {:noreply, %{state | latest_data: %{}, connected: false, cached_value: nil}}
     end
   end
@@ -98,7 +98,7 @@ defmodule ElixirEpics.Monitor do
     %{"timeStamp" => %{"secondsPastEpoch" => seconds, "nanoseconds" => nanoseconds}} = data
     timestamp_ns = seconds * 1_000_000_000 + nanoseconds
     buffer = FlatBuffers.convert_to_f144_double(pvname, timestamp_ns, data["value"])
-    timestamp_ms = trunc(timestamp_ns / 1_000)
+    timestamp_ms = trunc(timestamp_ns / 1_000_000)
     {timestamp_ms, buffer}
   end
 
@@ -107,7 +107,7 @@ defmodule ElixirEpics.Monitor do
     %{"alarm" => %{"severity" => severity, "message" => message}} = data
     timestamp_ns = seconds * 1_000_000_000 + nanoseconds
     buffer = FlatBuffers.convert_to_al00(pvname, timestamp_ns, severity, message)
-    timestamp_ms = trunc(timestamp_ns / 1_000)
+    timestamp_ms = trunc(timestamp_ns / 1_000_000)
     {timestamp_ms, buffer}
   end
 
@@ -119,7 +119,6 @@ defmodule ElixirEpics.Monitor do
     updated = Map.merge(state.latest_data, data)
     Logger.info("Data: #{inspect(updated)}")
     result = generate_f144_for_double(state.pvname, updated)
-    Logger.info("#{inspect(result)}")
     send_to_kafka(result, state.topic)
     # TODO: handle alarms properly
     foo = generate_alOO(state.pvname, updated)

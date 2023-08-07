@@ -41,6 +41,7 @@ From within iex:
 
 ## Possible improvements
 - Alarms and connections.
+  - al00 conversion in place, but just hacked in. Needs to only be updated when value changes (also f144 needs this) and needs periodic updates.
 - How to delete monitors.
 - The schema is hard-coded.
 - Use ETS just for experience of using it.
