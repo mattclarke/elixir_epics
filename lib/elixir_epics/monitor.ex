@@ -93,10 +93,20 @@ defmodule ElixirEpics.Monitor do
     {:noreply, state}
   end
 
-  defp generate_flatbuffer_for_double(pvname, data) do
+  defp generate_f144_for_double(pvname, data) do
+    Logger.warning("hello")
     %{"timeStamp" => %{"secondsPastEpoch" => seconds, "nanoseconds" => nanoseconds}} = data
     timestamp_ns = seconds * 1_000_000_000 + nanoseconds
-    buffer = FlatBuffers.convert_flatbuffer_double(pvname, timestamp_ns, data["value"])
+    buffer = FlatBuffers.convert_to_f144_double(pvname, timestamp_ns, data["value"])
+    timestamp_ms = trunc(timestamp_ns / 1_000)
+    {timestamp_ms, buffer}
+  end
+
+  defp generate_alOO(pvname, data) do
+    %{"timeStamp" => %{"secondsPastEpoch" => seconds, "nanoseconds" => nanoseconds}} = data
+    %{"alarm" => %{"severity" => severity, "message" => message}} = data
+    timestamp_ns = seconds * 1_000_000_000 + nanoseconds
+    buffer = FlatBuffers.convert_to_al00(pvname, timestamp_ns, severity, message)
     timestamp_ms = trunc(timestamp_ns / 1_000)
     {timestamp_ms, buffer}
   end
@@ -108,8 +118,13 @@ defmodule ElixirEpics.Monitor do
   defp handle_value_update(state, data) do
     updated = Map.merge(state.latest_data, data)
     Logger.info("Data: #{inspect(updated)}")
-    result = generate_flatbuffer_for_double(state[:pvname], updated)
+    result = generate_f144_for_double(state.pvname, updated)
+    Logger.info("#{inspect(result)}")
     send_to_kafka(result, state.topic)
+    # TODO: handle alarms properly
+    foo = generate_alOO(state.pvname, updated)
+    IO.inspect(foo)
+    send_to_kafka(foo, state.topic)
     state = on_first_connection(state)
     %{state | latest_data: updated, connected: true, cached_value: result}
   end

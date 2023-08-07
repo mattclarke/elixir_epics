@@ -34,6 +34,7 @@ From within iex:
 - The call is via the `run_wrapper` script as that makes sure that the pvmonitor process is cleaned up if the GenServer is stopped. See [zombie operating system processes](https://hexdocs.pm/elixir/Port.html#module-zombie-operating-system-processes) for more information.
 - The port passes data to the GenServer via stdout. 
 - pvmonitor is configured to format the PV data as JSON, so it is simple to recreate it in the GenServer.
+- Requires EPICS version > 7.0.7 as earlier version have a bug in the JSON output.
 
 ### Apache Kafka
 - Mostly taken care of by Brod.
@@ -41,6 +42,5 @@ From within iex:
 ## Possible improvements
 - Alarms and connections.
 - How to delete monitors.
-- Use `raw` until the `json` bug is fixed
 - The schema is hard-coded.
 - Use ETS just for experience of using it.
