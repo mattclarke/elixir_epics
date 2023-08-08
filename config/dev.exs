@@ -7,3 +7,6 @@ config :brod,
       auto_start_producers: true
     ]
   ]
+
+config :pv_monitor,
+  path: "/opt/epics/base/bin/darwin-aarch64/pvmonitor"

@@ -3,7 +3,6 @@ defmodule ElixirEpics.Monitor do
   require Logger
 
   @wrapper "run_wrapper"
-  @command "/opt/epics/base/bin/darwin-aarch64/pvmonitor"
 
   def start_link(args \\ [], opts \\ []) do
     GenServer.start_link(__MODULE__, args, opts)
@@ -15,7 +14,7 @@ defmodule ElixirEpics.Monitor do
     port =
       Port.open({:spawn_executable, @wrapper}, [
         :binary,
-        args: [@command, "-M", "raw", pvname]
+        args: [Application.fetch_env!(:pv_monitor, :path), "-M", "raw", pvname]
       ])
 
     Port.monitor(port)
