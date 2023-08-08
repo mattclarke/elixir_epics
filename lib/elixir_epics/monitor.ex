@@ -15,7 +15,7 @@ defmodule ElixirEpics.Monitor do
     port =
       Port.open({:spawn_executable, @wrapper}, [
         :binary,
-        args: [@command, "-M", "json", pvname]
+        args: [@command, "-M", "raw", pvname]
       ])
 
     Port.monitor(port)
@@ -52,19 +52,39 @@ defmodule ElixirEpics.Monitor do
 
   # Triggered when the port uses STDOUT
   def handle_info({port, {:data, text_line}}, %{port: port} = state) do
-    [pv, payload] = String.split(text_line, " ", parts: 2)
-    {status, data} = Jason.decode(payload)
+    # TODO: handle disconnection
+    data =
+      String.split(text_line, "\n")
+      |> Enum.reduce(%{}, fn x, acc ->
+        case String.trim(x) do
+          "double value " <> value ->
+            # Put the type in too?
+            {result, _} = Float.parse(value)
+            Map.put(acc, "value", result)
 
-    Logger.info("Updated for #{pv}")
+          "int severity " <> value ->
+            Map.put(acc, "severity", String.to_integer(value))
 
-    case status do
-      :ok ->
-        {:noreply, handle_value_update(state, data)}
+          "int status " <> value ->
+            Map.put(acc, "status", String.to_integer(value))
 
-      :error ->
-        Logger.info("Couldn't convert to json: #{inspect(payload)}")
-        {:noreply, %{state | latest_data: %{}, connected: false, cached_value: nil}}
-    end
+          "string message " <> value ->
+            Map.put(acc, "message", value)
+
+          "long secondsPastEpoch " <> value ->
+            Map.put(acc, "secondsPastEpoch", String.to_integer(value))
+
+          "int nanoseconds " <> value ->
+            Map.put(acc, "nanoseconds", String.to_integer(value))
+
+          _ ->
+            acc
+        end
+      end)
+
+    Logger.info("Updated for #{state.pvname}")
+
+    {:noreply, handle_value_update(state, data)}
   end
 
   # Triggered when the port exits normally
@@ -94,17 +114,21 @@ defmodule ElixirEpics.Monitor do
   end
 
   defp generate_f144_for_double(pvname, data) do
-    Logger.warning("hello")
-    %{"timeStamp" => %{"secondsPastEpoch" => seconds, "nanoseconds" => nanoseconds}} = data
+    %{"secondsPastEpoch" => seconds, "nanoseconds" => nanoseconds, "value" => value} = data
     timestamp_ns = seconds * 1_000_000_000 + nanoseconds
-    buffer = FlatBuffers.convert_to_f144_double(pvname, timestamp_ns, data["value"])
+    buffer = FlatBuffers.convert_to_f144_double(pvname, timestamp_ns, value)
     timestamp_ms = trunc(timestamp_ns / 1_000_000)
     {timestamp_ms, buffer}
   end
 
   defp generate_alOO(pvname, data) do
-    %{"timeStamp" => %{"secondsPastEpoch" => seconds, "nanoseconds" => nanoseconds}} = data
-    %{"alarm" => %{"severity" => severity, "message" => message}} = data
+    %{
+      "secondsPastEpoch" => seconds,
+      "nanoseconds" => nanoseconds,
+      "severity" => severity,
+      "message" => message
+    } = data
+
     timestamp_ns = seconds * 1_000_000_000 + nanoseconds
     buffer = FlatBuffers.convert_to_al00(pvname, timestamp_ns, severity, message)
     timestamp_ms = trunc(timestamp_ns / 1_000_000)
@@ -122,7 +146,6 @@ defmodule ElixirEpics.Monitor do
     send_to_kafka(result, state.topic)
     # TODO: handle alarms properly
     foo = generate_alOO(state.pvname, updated)
-    IO.inspect(foo)
     send_to_kafka(foo, state.topic)
     state = on_first_connection(state)
     %{state | latest_data: updated, connected: true, cached_value: result}
