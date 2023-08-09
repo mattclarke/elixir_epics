@@ -52,38 +52,16 @@ defmodule ElixirEpics.Monitor do
   # Triggered when the port uses STDOUT
   def handle_info({port, {:data, text_line}}, %{port: port} = state) do
     # TODO: handle disconnection
-    data =
-      String.split(text_line, "\n")
-      |> Enum.reduce(%{}, fn x, acc ->
-        case String.trim(x) do
-          "double value " <> value ->
-            # Put the type in too?
-            {result, _} = Float.parse(value)
-            Map.put(acc, "value", result)
+    cond do
+      String.contains?(text_line, "<Disconnect>") ->
+        Logger.info("#{state.pvname} is disconnected!")
+        {:noreply, state}
 
-          "int severity " <> value ->
-            Map.put(acc, "severity", String.to_integer(value))
-
-          "int status " <> value ->
-            Map.put(acc, "status", String.to_integer(value))
-
-          "string message " <> value ->
-            Map.put(acc, "message", value)
-
-          "long secondsPastEpoch " <> value ->
-            Map.put(acc, "secondsPastEpoch", String.to_integer(value))
-
-          "int nanoseconds " <> value ->
-            Map.put(acc, "nanoseconds", String.to_integer(value))
-
-          _ ->
-            acc
-        end
-      end)
-
-    Logger.info("Updated for #{state.pvname}")
-
-    {:noreply, handle_value_update(state, data)}
+      true ->
+        Logger.info("Update for #{state.pvname}")
+        data = extract_epics_data(text_line)
+        {:noreply, handle_value_update(state, data)}
+    end
   end
 
   # Triggered when the port exits normally
@@ -110,6 +88,36 @@ defmodule ElixirEpics.Monitor do
   def handle_info(msg, state) do
     Logger.info("Unhandled message: #{inspect(msg)}")
     {:noreply, state}
+  end
+
+  defp extract_epics_data(message) do
+      String.split(message, "\n")
+      |> Enum.reduce(%{}, fn x, acc ->
+        case String.trim(x) do
+          "double value " <> value ->
+            # Put the type in too?
+            {result, _} = Float.parse(value)
+            Map.put(acc, "value", result)
+
+          "int severity " <> value ->
+            Map.put(acc, "severity", String.to_integer(value))
+
+          "int status " <> value ->
+            Map.put(acc, "status", String.to_integer(value))
+
+          "string message " <> value ->
+            Map.put(acc, "message", value)
+
+          "long secondsPastEpoch " <> value ->
+            Map.put(acc, "secondsPastEpoch", String.to_integer(value))
+
+          "int nanoseconds " <> value ->
+            Map.put(acc, "nanoseconds", String.to_integer(value))
+
+          _ ->
+            acc
+        end
+      end)
   end
 
   defp generate_f144_for_double(pvname, data) do
