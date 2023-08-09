@@ -8,5 +8,5 @@ config :brod,
     ]
   ]
 
-config :pv_monitor,
-  path: "/opt/epics/base/bin/darwin-aarch64/pvmonitor"
+config :elixir_epics,
+  pvmonitor: "/opt/epics/base/bin/darwin-aarch64/pvmonitor"

@@ -14,7 +14,7 @@ defmodule ElixirEpics.Monitor do
     port =
       Port.open({:spawn_executable, @wrapper}, [
         :binary,
-        args: [Application.fetch_env!(:pv_monitor, :path), "-M", "raw", pvname]
+        args: [Application.fetch_env!(:elixir_epics, :pvmonitor), "-M", "raw", pvname]
       ])
 
     Port.monitor(port)
@@ -134,6 +134,18 @@ defmodule ElixirEpics.Monitor do
     {timestamp_ms, buffer}
   end
 
+  defp generate_ep01(pvname, data, state) do
+    %{
+      "secondsPastEpoch" => seconds,
+      "nanoseconds" => nanoseconds
+    } = data
+
+    timestamp_ns = seconds * 1_000_000_000 + nanoseconds
+    buffer = FlatBuffers.convert_to_ep01(pvname, timestamp_ns, state)
+    timestamp_ms = trunc(timestamp_ns / 1_000_000)
+    {timestamp_ms, buffer}
+  end
+
   defp send_to_kafka({timestamp_ms, buffer}, topic) do
     :brod.produce_sync(:kafka_client, topic, :hash, <<>>, {timestamp_ms, buffer})
   end
@@ -143,9 +155,11 @@ defmodule ElixirEpics.Monitor do
     Logger.info("Data: #{inspect(updated)}")
     result = generate_f144_for_double(state.pvname, updated)
     send_to_kafka(result, state.topic)
-    # TODO: handle alarms properly
+    # TODO: handle alarms and connection properly
     foo = generate_alOO(state.pvname, updated)
     send_to_kafka(foo, state.topic)
+    bar = generate_ep01(state.pvname, updated, 1)
+    send_to_kafka(bar, state.topic)
     state = on_first_connection(state)
     %{state | latest_data: updated, connected: true, cached_value: result}
   end

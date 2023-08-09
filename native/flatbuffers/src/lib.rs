@@ -12,6 +12,12 @@ mod al00_alarm_generated;
 pub use al00_alarm_generated::{Alarm, ALARM_IDENTIFIER};
 use crate::al00_alarm_generated::{AlarmArgs, Severity};
 
+#[allow(dead_code, unused_imports, non_camel_case_types)]
+#[path = "./ep01_epics_connection_generated.rs"]
+mod ep01_epics_connection_generated;
+pub use ep01_epics_connection_generated::{EpicsPVConnectionInfo, EPICS_PVCONNECTION_INFO_IDENTIFIER};
+use crate::ep01_epics_connection_generated::{EpicsPVConnectionInfoArgs, ConnectionInfo};
+
 use rustler::types::binary::{NewBinary, Binary};
 use rustler::{Env};
 
@@ -70,4 +76,35 @@ fn convert_to_al00<'a>(env: Env<'a>, source_name: &str, timestamp: i64, severity
     return Binary::from(new_binary);
 }
 
-rustler::init!("Elixir.FlatBuffers", [convert_to_f144_double, convert_to_al00]);
+#[rustler::nif]
+fn convert_to_ep01<'a>(env: Env<'a>, source_name: &str, timestamp: i64, status: i8) -> Binary<'a>{
+    let mut builder = flatbuffers::FlatBufferBuilder::with_capacity(1024);
+    let source = builder.create_string(source_name);
+
+    let mut state = ConnectionInfo::UNKNOWN;
+
+    match status {
+        1 => state = ConnectionInfo::NEVER_CONNECTED,
+        2 => state = ConnectionInfo::CONNECTED,
+        3 => state = ConnectionInfo::DISCONNECTED,
+        4 => state = ConnectionInfo::DESTROYED,
+        5 => state = ConnectionInfo::CANCELLED,
+        6 => state = ConnectionInfo::FINISHED,
+        7 => state = ConnectionInfo::REMOTE_ERROR,
+        _ => state = ConnectionInfo::UNKNOWN,
+    }
+    let connection = EpicsPVConnectionInfo::create(&mut builder, &EpicsPVConnectionInfoArgs{
+        source_name: Some(source),
+        timestamp,
+        status: state,
+        ..Default::default()
+    });
+
+    builder.finish(connection, Option::from(EPICS_PVCONNECTION_INFO_IDENTIFIER));
+    let buf = builder.finished_data();
+
+    let mut new_binary = NewBinary::new(env, buf.len());
+    new_binary.copy_from_slice(buf);
+    return Binary::from(new_binary);
+}
+rustler::init!("Elixir.FlatBuffers", [convert_to_f144_double, convert_to_al00, convert_to_ep01]);

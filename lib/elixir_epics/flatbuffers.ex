@@ -7,4 +7,7 @@ defmodule FlatBuffers do
 
   def convert_to_al00(_source, _timestamp, _severity, _message),
     do: :erlang.nif_error(:nif_not_loaded)
+
+  def convert_to_ep01(_source, _timestamp, _status),
+    do: :erlang.nif_error(:nif_not_loaded)
 end
