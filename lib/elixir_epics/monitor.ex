@@ -30,7 +30,9 @@ defmodule ElixirEpics.Monitor do
        has_connected: false,
        pvname: pvname,
        topic: topic,
-       cached_value: nil
+       cached_value: nil,
+       cached_alarm: nil,
+       cached_connection: nil
      }}
   end
 
@@ -42,8 +44,11 @@ defmodule ElixirEpics.Monitor do
   # Triggered by a timer
   def handle_info(:update, state) do
     if state.connected do
-      send_to_kafka(state.cached_value, "test_topic")
+      send_to_kafka(state.cached_value, state.topic)
+      send_to_kafka(state.cached_alarm, state.topic)
     end
+
+    send_to_kafka(state.cached_connection, state.topic)
 
     schedule_update()
     {:noreply, state}
@@ -51,16 +56,24 @@ defmodule ElixirEpics.Monitor do
 
   # Triggered when the port uses STDOUT
   def handle_info({port, {:data, text_line}}, %{port: port} = state) do
-    # TODO: handle disconnection
     cond do
       String.contains?(text_line, "<Disconnect>") ->
         Logger.info("#{state.pvname} is disconnected!")
-        {:noreply, state}
+        {:noreply, on_disconnect(state)}
 
       true ->
         Logger.info("Update for #{state.pvname}")
         data = extract_epics_data(text_line)
-        {:noreply, handle_value_update(state, data)}
+        data = Map.merge(state.latest_data, data)
+        Logger.info("Data: #{inspect(data)}")
+
+        new_state =
+          state
+          |> handle_value_update(data)
+          |> on_connect(data)
+          |> handle_alarm_update(data)
+
+        {:noreply, new_state}
     end
   end
 
@@ -91,33 +104,33 @@ defmodule ElixirEpics.Monitor do
   end
 
   defp extract_epics_data(message) do
-      String.split(message, "\n")
-      |> Enum.reduce(%{}, fn x, acc ->
-        case String.trim(x) do
-          "double value " <> value ->
-            # Put the type in too?
-            {result, _} = Float.parse(value)
-            Map.put(acc, "value", result)
+    String.split(message, "\n")
+    |> Enum.reduce(%{}, fn x, acc ->
+      case String.trim(x) do
+        "double value " <> value ->
+          # Put the type in too?
+          {result, _} = Float.parse(value)
+          Map.put(acc, "value", result)
 
-          "int severity " <> value ->
-            Map.put(acc, "severity", String.to_integer(value))
+        "int severity " <> value ->
+          Map.put(acc, "severity", String.to_integer(value))
 
-          "int status " <> value ->
-            Map.put(acc, "status", String.to_integer(value))
+        "int status " <> value ->
+          Map.put(acc, "status", String.to_integer(value))
 
-          "string message " <> value ->
-            Map.put(acc, "message", value)
+        "string message " <> value ->
+          Map.put(acc, "message", value)
 
-          "long secondsPastEpoch " <> value ->
-            Map.put(acc, "secondsPastEpoch", String.to_integer(value))
+        "long secondsPastEpoch " <> value ->
+          Map.put(acc, "secondsPastEpoch", String.to_integer(value))
 
-          "int nanoseconds " <> value ->
-            Map.put(acc, "nanoseconds", String.to_integer(value))
+        "int nanoseconds " <> value ->
+          Map.put(acc, "nanoseconds", String.to_integer(value))
 
-          _ ->
-            acc
-        end
-      end)
+        _ ->
+          acc
+      end
+    end)
   end
 
   defp generate_f144_for_double(pvname, data) do
@@ -128,7 +141,47 @@ defmodule ElixirEpics.Monitor do
     {timestamp_ms, buffer}
   end
 
-  defp generate_alOO(pvname, data) do
+  defp send_to_kafka({timestamp_ms, buffer}, topic) do
+    :brod.produce_sync(:kafka_client, topic, :hash, <<>>, {timestamp_ms, buffer})
+  end
+
+  defp on_disconnect(state) do
+    # TODO: some duplication!
+    # On disconnect we don't get a timestamp from EPICS so we need to generate it ourselves
+    timestamp_ns = System.os_time()
+    buffer = FlatBuffers.convert_to_ep01(state.pvname, timestamp_ns, 3)
+    timestamp_ms = trunc(timestamp_ns / 1_000_000)
+    send_to_kafka({timestamp_ms, buffer}, state.topic)
+
+    %{
+      state
+      | connected: false,
+        cached_value: nil,
+        cached_alarm: nil,
+        cached_connection: {timestamp_ms, buffer},
+        latest_data: %{}
+    }
+  end
+
+  defp on_connect(state, data) do
+    # TODO: Don't update/send if there is no change
+
+    # TODO: some duplication!
+    %{
+      "secondsPastEpoch" => seconds,
+      "nanoseconds" => nanoseconds
+    } = data
+
+    timestamp_ns = seconds * 1_000_000_000 + nanoseconds
+    buffer = FlatBuffers.convert_to_ep01(state.pvname, timestamp_ns, 2)
+    timestamp_ms = trunc(timestamp_ns / 1_000_000)
+    send_to_kafka({timestamp_ms, buffer}, state.topic)
+    %{state | connected: true, cached_connection: {timestamp_ms, buffer}}
+  end
+
+  defp handle_alarm_update(state, data) do
+    # TODO: Don't update/send if there is no change
+
     %{
       "secondsPastEpoch" => seconds,
       "nanoseconds" => nanoseconds,
@@ -137,39 +190,19 @@ defmodule ElixirEpics.Monitor do
     } = data
 
     timestamp_ns = seconds * 1_000_000_000 + nanoseconds
-    buffer = FlatBuffers.convert_to_al00(pvname, timestamp_ns, severity, message)
+    buffer = FlatBuffers.convert_to_al00(state.pvname, timestamp_ns, severity, message)
     timestamp_ms = trunc(timestamp_ns / 1_000_000)
-    {timestamp_ms, buffer}
-  end
-
-  defp generate_ep01(pvname, data, state) do
-    %{
-      "secondsPastEpoch" => seconds,
-      "nanoseconds" => nanoseconds
-    } = data
-
-    timestamp_ns = seconds * 1_000_000_000 + nanoseconds
-    buffer = FlatBuffers.convert_to_ep01(pvname, timestamp_ns, state)
-    timestamp_ms = trunc(timestamp_ns / 1_000_000)
-    {timestamp_ms, buffer}
-  end
-
-  defp send_to_kafka({timestamp_ms, buffer}, topic) do
-    :brod.produce_sync(:kafka_client, topic, :hash, <<>>, {timestamp_ms, buffer})
+    send_to_kafka({timestamp_ms, buffer}, state.topic)
+    %{state | cached_alarm: {timestamp_ms, buffer}}
   end
 
   defp handle_value_update(state, data) do
-    updated = Map.merge(state.latest_data, data)
-    Logger.info("Data: #{inspect(updated)}")
-    result = generate_f144_for_double(state.pvname, updated)
+    # TODO: Don't update/send if there is no change
+
+    result = generate_f144_for_double(state.pvname, data)
     send_to_kafka(result, state.topic)
-    # TODO: handle alarms and connection properly
-    foo = generate_alOO(state.pvname, updated)
-    send_to_kafka(foo, state.topic)
-    bar = generate_ep01(state.pvname, updated, 1)
-    send_to_kafka(bar, state.topic)
     state = on_first_connection(state)
-    %{state | latest_data: updated, connected: true, cached_value: result}
+    %{state | latest_data: data, cached_value: result}
   end
 
   defp on_first_connection(state) do

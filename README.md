@@ -40,8 +40,7 @@ From within iex:
 - Mostly taken care of by Brod.
 
 ## Possible improvements
-- Alarms and connections.
-  - fb conversions in place, but just hacked in. Needs to only be updated when value changes (also f144 needs this) and needs periodic updates.
+- Cached values need to only be updated when value changes.
 - Separate the monitor code into a separate testable module.
 - How to delete monitors.
 - The schema is hard-coded.
