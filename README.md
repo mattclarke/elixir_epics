@@ -28,6 +28,15 @@ From within iex:
 > ElixirEpics.MonitorSupervisor.start_child({"SIMPLE:VALUE2", "test_topic", "schema is ignored"})
 ```
 
+### Stopping a monitor by hand
+From within iex:
+```
+# Assumes we know the pid
+> p = pid(<the comma-separated pid>)
+> GenServer.stop(p, :normal)
+```
+Anything other than `:normal` or `:shutdown` will automatically restart the process.
+
 ## How it works
 ### Ports
 - The program creates a GenServer that uses the [Port module](https://hexdocs.pm/elixir/Port.html) to create a pvmonitor process to monitor a port.
@@ -42,6 +51,6 @@ From within iex:
 ## Possible improvements
 - Cached values need to only be updated when value changes.
 - Separate the monitor code into a separate testable module.
-- How to delete monitors.
+- How to remove monitors via code.
 - The schema is hard-coded.
 - Use ETS just for experience of using it.

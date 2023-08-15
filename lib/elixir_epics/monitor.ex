@@ -1,5 +1,5 @@
 defmodule ElixirEpics.Monitor do
-  use GenServer
+  use GenServer, restart: :transient
   require Logger
 
   @wrapper "run_wrapper"

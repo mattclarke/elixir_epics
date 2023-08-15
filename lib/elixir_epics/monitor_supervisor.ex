@@ -11,7 +11,6 @@ defmodule ElixirEpics.MonitorSupervisor do
   end
 
   def start_child(init_args) do
-    # spec = %{id: ElixirEpics.Monitor, start: {ElixirEpics.Monitor, :start_link, init_args}}
     DynamicSupervisor.start_child(__MODULE__, {ElixirEpics.Monitor, init_args})
   end
 end
