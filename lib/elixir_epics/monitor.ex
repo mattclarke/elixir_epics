@@ -112,6 +112,11 @@ defmodule ElixirEpics.Monitor do
           {result, _} = Float.parse(value)
           Map.put(acc, "value", result)
 
+        "long[] value " <> value ->
+          {result, _} = Code.eval_string(value)
+          IO.inspect(result)
+          # Map.put(acc, "value", result)
+
         "int severity " <> value ->
           Map.put(acc, "severity", String.to_integer(value))
 

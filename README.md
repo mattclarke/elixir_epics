@@ -49,6 +49,7 @@ Anything other than `:normal` or `:shutdown` will automatically restart the proc
 - Mostly taken care of by Brod.
 
 ## Possible improvements
+- Handle long[], double[], int[] (does that exist?)
 - Cached values need to only be updated when value changes.
 - Separate the monitor code into a separate testable module.
 - How to remove monitors via code.
