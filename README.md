@@ -26,6 +26,7 @@ Running:
 From within iex:
 ```
 > ElixirEpics.MonitorSupervisor.start_child({"SIMPLE:VALUE2", "test_topic", "schema is ignored"})
+> ElixirEpics.MonitorSupervisor.start_child({"SIMPLE:WAVE", "test_topic", "schema is ignored"})  
 ```
 
 ### Stopping a monitor by hand

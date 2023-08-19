@@ -4,7 +4,7 @@ extern crate flatbuffers;
 #[path = "./f144_logdata_generated.rs"]
 mod f144_logdata_generated;
 pub use f144_logdata_generated::{f144_LogData, Value, F_144_LOG_DATA_IDENTIFIER};
-use crate::f144_logdata_generated::{f144_LogDataArgs, Double, DoubleArgs};
+use crate::f144_logdata_generated::{f144_LogDataArgs, Double, DoubleArgs, ArrayLong, ArrayLongArgs};
 
 #[allow(dead_code, unused_imports, non_camel_case_types)]
 #[path = "./al00_alarm_generated.rs"]
@@ -21,6 +21,13 @@ use crate::ep01_epics_connection_generated::{EpicsPVConnectionInfoArgs, Connecti
 use rustler::types::binary::{NewBinary, Binary};
 use rustler::{Env};
 
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, Debug)]
+struct LongArray {
+    data: Vec<i64>,
+}
+
 #[rustler::nif]
 fn convert_to_f144_double<'a>(env: Env<'a>, source_name: &str, timestamp: i64, value: f64) -> Binary<'a>{
     let mut builder = flatbuffers::FlatBufferBuilder::with_capacity(1024);
@@ -34,6 +41,36 @@ fn convert_to_f144_double<'a>(env: Env<'a>, source_name: &str, timestamp: i64, v
         timestamp,
         value: Some(log_value.as_union_value()),
         value_type: Value::Double,
+        ..Default::default()
+    });
+
+    builder.finish(logdata, Option::from(F_144_LOG_DATA_IDENTIFIER));
+    let buf = builder.finished_data();
+
+    let mut new_binary = NewBinary::new(env, buf.len());
+    new_binary.copy_from_slice(buf);
+    return Binary::from(new_binary);
+}
+
+#[rustler::nif]
+fn convert_to_f144_long_array<'a>(env: Env<'a>, source_name: &str, timestamp: i64, values: &str) -> Binary<'a>{
+    let mut builder = flatbuffers::FlatBufferBuilder::with_capacity(1024);
+    let source = builder.create_string(source_name);
+
+    // make the array look like a JSON object, so we can deserialise it
+    let as_json: String = format!("{{\"data\":{}}}", values);
+    let obj: LongArray = serde_json::from_str(as_json.as_str()).unwrap();
+
+    let log_values = builder.create_vector(&obj.data);
+    let log_value= ArrayLong::create(&mut builder, &ArrayLongArgs {
+        value: Some(log_values),
+    });
+
+    let logdata = f144_LogData::create(&mut builder, &f144_LogDataArgs{
+        source_name: Some(source),
+        timestamp,
+        value: Some(log_value.as_union_value()),
+        value_type: Value::ArrayLong,
         ..Default::default()
     });
 
@@ -107,4 +144,4 @@ fn convert_to_ep01<'a>(env: Env<'a>, source_name: &str, timestamp: i64, status: 
     new_binary.copy_from_slice(buf);
     return Binary::from(new_binary);
 }
-rustler::init!("Elixir.FlatBuffers", [convert_to_f144_double, convert_to_al00, convert_to_ep01]);
+rustler::init!("Elixir.FlatBuffers", [convert_to_f144_double, convert_to_f144_long_array, convert_to_al00, convert_to_ep01]);
