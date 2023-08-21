@@ -43,14 +43,18 @@ Anything other than `:normal` or `:shutdown` will automatically restart the proc
 - The program creates a GenServer that uses the [Port module](https://hexdocs.pm/elixir/Port.html) to create a pvmonitor process to monitor a port.
 - The call is via the `run_wrapper` script as that makes sure that the pvmonitor process is cleaned up if the GenServer is stopped. See [zombie operating system processes](https://hexdocs.pm/elixir/Port.html#module-zombie-operating-system-processes) for more information.
 - The port passes data to the GenServer via stdout. 
-- pvmonitor is configured to format the PV data as JSON, so it is simple to recreate it in the GenServer.
-- Requires EPICS version > 7.0.7 as earlier version have a bug in the JSON output.
+- pvmonitor is configured to format the PV data in the `raw` format.
+- Standard out has a limit to how much data it can output in one go, so for long waveforms the data may be split over multiple "updates". To handle this pvget is modified to print `=====\n` at the end:
+```
+pvget.cpp line 242 insert:
+
+std::cout << "=====\n";
+```
 
 ### Apache Kafka
 - Mostly taken care of by Brod.
 
 ## Possible improvements
-- Port splits the sys out if there is too much data? e.g. a long epics waveform
 - Handle long[], double[], int[] (does that exist?)
 - Cached values need to only be updated when value changes.
 - Separate the monitor code into a separate testable module.

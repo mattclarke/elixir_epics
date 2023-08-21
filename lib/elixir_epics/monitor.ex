@@ -32,7 +32,8 @@ defmodule ElixirEpics.Monitor do
        topic: topic,
        cached_value: nil,
        cached_alarm: nil,
-       cached_connection: nil
+       cached_connection: nil,
+       partial_message: ""
      }}
   end
 
@@ -61,18 +62,25 @@ defmodule ElixirEpics.Monitor do
         Logger.info("#{state.pvname} is disconnected!")
         {:noreply, on_disconnect(state)}
 
-      true ->
+      String.ends_with?(text_line, "=====\n") ->
         Logger.info("Update for #{state.pvname}")
-        data = extract_epics_data(text_line)
+        message = state.partial_message <> text_line
+        data = extract_epics_data(message)
         data = Map.merge(state.latest_data, data)
-        Logger.info("Data: #{inspect(data)}")
 
         new_state =
-          state
+          %{state | partial_message: ""}
           |> handle_value_update(data)
           |> on_connect(data)
           |> handle_alarm_update(data)
 
+        {:noreply, new_state}
+
+      true ->
+        # incomplete message
+        Logger.info("start of update for #{state.pvname}")
+        message = state.partial_message <> text_line
+        new_state = %{state | partial_message: message}
         {:noreply, new_state}
     end
   end
@@ -113,9 +121,8 @@ defmodule ElixirEpics.Monitor do
           Map.put(acc, "value", result)
 
         "long[] value " <> value ->
-          {result, _} = Code.eval_string(value)
-          IO.inspect(result)
-          # Map.put(acc, "value", result)
+          # Store the raw value as we will do the conversion in Rust
+          Map.put(acc, "value", value)
 
         "int severity " <> value ->
           Map.put(acc, "severity", String.to_integer(value))
@@ -142,6 +149,14 @@ defmodule ElixirEpics.Monitor do
     %{"secondsPastEpoch" => seconds, "nanoseconds" => nanoseconds, "value" => value} = data
     timestamp_ns = seconds * 1_000_000_000 + nanoseconds
     buffer = FlatBuffers.convert_to_f144_double(pvname, timestamp_ns, value)
+    timestamp_ms = trunc(timestamp_ns / 1_000_000)
+    {timestamp_ms, buffer}
+  end
+
+  defp generate_f144_for_long_array(pvname, data) do
+    %{"secondsPastEpoch" => seconds, "nanoseconds" => nanoseconds, "value" => value} = data
+    timestamp_ns = seconds * 1_000_000_000 + nanoseconds
+    buffer = FlatBuffers.convert_to_f144_long_array(pvname, timestamp_ns, value)
     timestamp_ms = trunc(timestamp_ns / 1_000_000)
     {timestamp_ms, buffer}
   end
