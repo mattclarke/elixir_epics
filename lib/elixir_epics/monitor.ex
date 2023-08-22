@@ -1,4 +1,36 @@
+defmodule ElixirEpics.F144 do
+  def generate_flatbuffer(pvname, data) do
+    %{"type" => type} = data
+
+    case type do
+      "double" -> generate_f144_for_double(pvname, data)
+      "long[]" -> generate_f144_for_long_array(pvname, data)
+    end
+  end
+
+  defp generate_f144_for_double(pvname, data) do
+    %{"secondsPastEpoch" => seconds, "nanoseconds" => nanoseconds, "value" => value} = data
+    {timestamp_ns, timestamp_ms} = calculate_timestamps(seconds, nanoseconds)
+    buffer = FlatBuffers.convert_to_f144_double(pvname, timestamp_ns, value)
+    {timestamp_ms, buffer}
+  end
+
+  defp generate_f144_for_long_array(pvname, data) do
+    %{"secondsPastEpoch" => seconds, "nanoseconds" => nanoseconds, "value" => value} = data
+    {timestamp_ns, timestamp_ms} = calculate_timestamps(seconds, nanoseconds)
+    buffer = FlatBuffers.convert_to_f144_long_array(pvname, timestamp_ns, value)
+    {timestamp_ms, buffer}
+  end
+
+  defp calculate_timestamps(seconds, nanoseconds) do
+    timestamp_ns = seconds * 1_000_000_000 + nanoseconds
+    timestamp_ms = trunc(timestamp_ns / 1_000_000)
+    {timestamp_ns, timestamp_ms}
+  end
+end
+
 defmodule ElixirEpics.Monitor do
+  alias ElixirEpics.F144
   use GenServer, restart: :transient
   require Logger
 
@@ -116,13 +148,15 @@ defmodule ElixirEpics.Monitor do
     |> Enum.reduce(%{}, fn x, acc ->
       case String.trim(x) do
         "double value " <> value ->
-          # Put the type in too?
+          # TODO: store the raw value too and leave all conversions to Rust?
           {result, _} = Float.parse(value)
-          Map.put(acc, "value", result)
+          acc = Map.put(acc, "value", result)
+          Map.put(acc, "type", "double")
 
         "long[] value " <> value ->
           # Store the raw value as we will do the conversion in Rust
-          Map.put(acc, "value", value)
+          acc = Map.put(acc, "value", value)
+          Map.put(acc, "type", "long[]")
 
         "int severity " <> value ->
           Map.put(acc, "severity", String.to_integer(value))
@@ -143,22 +177,6 @@ defmodule ElixirEpics.Monitor do
           acc
       end
     end)
-  end
-
-  defp generate_f144_for_double(pvname, data) do
-    %{"secondsPastEpoch" => seconds, "nanoseconds" => nanoseconds, "value" => value} = data
-    timestamp_ns = seconds * 1_000_000_000 + nanoseconds
-    buffer = FlatBuffers.convert_to_f144_double(pvname, timestamp_ns, value)
-    timestamp_ms = trunc(timestamp_ns / 1_000_000)
-    {timestamp_ms, buffer}
-  end
-
-  defp generate_f144_for_long_array(pvname, data) do
-    %{"secondsPastEpoch" => seconds, "nanoseconds" => nanoseconds, "value" => value} = data
-    timestamp_ns = seconds * 1_000_000_000 + nanoseconds
-    buffer = FlatBuffers.convert_to_f144_long_array(pvname, timestamp_ns, value)
-    timestamp_ms = trunc(timestamp_ns / 1_000_000)
-    {timestamp_ms, buffer}
   end
 
   defp send_to_kafka({timestamp_ms, buffer}, topic) do
@@ -219,7 +237,7 @@ defmodule ElixirEpics.Monitor do
   defp handle_value_update(state, data) do
     # TODO: Don't update/send if there is no change
 
-    result = generate_f144_for_double(state.pvname, data)
+    result = F144.generate_flatbuffer(state.pvname, data)
     send_to_kafka(result, state.topic)
     state = on_first_connection(state)
     %{state | latest_data: data, cached_value: result}
