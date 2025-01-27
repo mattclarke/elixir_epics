@@ -1,6 +1,7 @@
 defmodule ElixirEpics.F144 do
   def generate_flatbuffer(pvname, data) do
     %{"type" => type} = data
+    a = 5
 
     case type do
       "double" -> generate_f144_for_double(pvname, data)
@@ -109,7 +110,7 @@ defmodule ElixirEpics.Monitor do
         {:noreply, new_state}
 
       true ->
-        # incomplete message
+        # Incomplete message
         Logger.info("start of update for #{state.pvname}")
         message = state.partial_message <> text_line
         new_state = %{state | partial_message: message}
@@ -258,6 +259,6 @@ defmodule ElixirEpics.Monitor do
   end
 
   defp schedule_update() do
-    Process.send_after(self(), :update, 5000)
+    # Process.send_after(self(), :update, 5000)
   end
 end
